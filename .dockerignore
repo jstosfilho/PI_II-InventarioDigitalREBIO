@@ -1,0 +1,8 @@
+.venv
+.git
+instance
+Dados do PI_II
+analise
+tmp
+__pycache__
+.env

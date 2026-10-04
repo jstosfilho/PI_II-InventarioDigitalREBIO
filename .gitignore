@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+instance/
+.env
+tmp/
+# Fontes com dados pessoais e mensagens do grupo ficam somente no workspace.
+Dados do PI_II/
+analise/fontes_extraidas/
