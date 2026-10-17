@@ -13,7 +13,7 @@ if __name__=='__main__':
     folder=Path('tmp/figma-qa')
     folder.mkdir(parents=True,exist_ok=True)
     database=folder/'preview.sqlite3'
-    app=create_app({'DATABASE':str(database.resolve()),'SECRET_KEY':secrets.token_hex(32),'TEMPLATES_AUTO_RELOAD':True})
+    app=create_app({'DATABASE':str(database.resolve()),'DATABASE_URL':None,'SECRET_KEY':secrets.token_hex(32),'TEMPLATES_AUTO_RELOAD':True})
     app.test_cli_runner().invoke(args=['init-db'])
     connection=sqlite3.connect(database)
     with connection:

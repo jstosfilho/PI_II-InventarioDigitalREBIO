@@ -72,3 +72,17 @@ Perguntas centrais: os campos representam o levantamento realizado? As coordenad
 | Ajuste acordado e prioridade | A registrar |
 
 Não usar a aceitação do tema como se fosse aprovação do software. A aprovação do escopo e o feedback sobre o protótipo são evidências diferentes.
+
+## Preparação para Vercel — 15/10/2026
+
+Foi adicionado suporte PostgreSQL e preservado o SQLite local. As verificações foram executadas em bancos temporários e dados fictícios, sem utilizar o banco do usuário ou criar contas em provedores.
+
+- SQLite e geometria: 29 testes aprovados, incluindo rollback quando a gravação do histórico falha e criação de contas sem substituir um login existente.
+- Configuração Vercel: 4 testes aprovados, verificando exigência de banco/segredo, ausência de escritas na inicialização serverless e limite de importação.
+- PostgreSQL portátil local: 19 testes aprovados na suíte de integração e 1 caso ignorado por ser exclusivo da migração de arquivo SQLite. Um teste adicional do assistente de criação do primeiro gestor também foi aprovado. Foram verificados login, perfis, filtros sem distinção de caixa, importação, exportação, transações, histórico, exclusão e duas edições simultâneas com apenas uma vencedora.
+- Navegador: fluxo de login, detalhes, edição, importação GPX, cadastro manual, exclusão e tela de celular aprovado; sete capturas, sem erros JavaScript ou rolagem horizontal indevida. Tiles simulados, sem requisições ao servidor OSM.
+- Build de assets executado e conteúdo de `public/static` conferido com as fontes; `node --check` aprovado e dependências de `requirements.txt`/`pyproject.toml` consistentes. Preset Flask conferido no schema oficial da Vercel; não foi executado um build remoto na plataforma.
+
+Total das verificações automatizadas de backend/configuração: 53 aprovações e 1 caso ignorado, somando as execuções SQLite/geometria, Vercel, PostgreSQL e assistente. A falha inicial dos testes PostgreSQL foi localizada na codificação de espaços da URL de isolamento e corrigida antes da repetição aprovada.
+
+Ainda faltam criar/configurar as contas do usuário, publicar na Vercel e verificar o ambiente remoto, incluindo TLS, acesso ao banco, assets, persistência e limites de resposta. O [roteiro de publicação](PUBLICAR_VERCEL.md) descreve esses passos. Dados do SQLite não foram migrados.

@@ -6,6 +6,8 @@ O escopo segue o plano de ação local e o histórico até 02/10/2026. A interfa
 
 ## Executar no Windows
 
+**Publicação na Vercel:** configuração preparada para Flask + PostgreSQL. Comece pelo [guia para iniciantes](docs/PUBLICAR_VERCEL_PARA_INICIANTES.md), com instruções de onde clicar, comandos e resultados esperados. A [referência técnica](docs/PUBLICAR_VERCEL.md) detalha a configuração. O SQLite continua sendo a opção local; contas e registros locais não são transferidos automaticamente para a nuvem.
+
 Python 3.12 ou superior. Nesta pasta, o ambiente `.venv` já foi preparado durante o desenvolvimento.
 
 ```powershell
@@ -27,7 +29,7 @@ O comando `create-user` pede uma senha de pelo menos 10 caracteres; não há sen
 - Exportação GeoJSON autenticada e histórico de versões.
 - Arquivamento pelo gestor, preservando o histórico; proteção contra edição concorrente.
 - Painéis laterais de detalhes, cadastro e edição conforme o Figma.
-- Link HTTPS de fotos, importação GPX/KML de até 15 MiB e extensão aproximada das trilhas.
+- Link HTTPS de fotos, importação GPX/KML de até 15 MiB localmente (4 MiB na Vercel) e extensão aproximada das trilhas.
 - Exclusão permanente pelo gestor com confirmação, removendo também o histórico do registro.
 - Sessões, senhas com hash e proteção CSRF nas mutações autenticadas.
 

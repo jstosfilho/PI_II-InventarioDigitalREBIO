@@ -2,6 +2,8 @@
 
 ## Situação
 
+**Atualização de 15/10/2026:** para a Vercel, seguir [PUBLICAR_VERCEL.md](PUBLICAR_VERCEL.md). Foi adicionado suporte a PostgreSQL por `DATABASE_URL`, sem persistência em arquivo na função. As instruções de volume, Waitress e backup SQLite abaixo descrevem a alternativa com servidor persistente, não o fluxo Vercel. A publicação efetiva ainda depende de configurar as contas e variáveis do usuário.
+
 Aplicação local implementada. Dockerfile e execução Waitress preparados, mas não executados/validados em nuvem nesta sessão. Escolher uma infraestrutura com **uma instância e volume persistente**; SQLite não serve para múltiplas réplicas com arquivos independentes.
 
 ## Preparar a instância

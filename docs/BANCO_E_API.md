@@ -1,5 +1,7 @@
 # Modelo de dados e API
 
+**Atualização de 15/10/2026 — Vercel:** `DATABASE_URL` seleciona PostgreSQL, com DDL em `inventario/schema_postgres.sql`; sem essa variável, permanece SQLite. O modelo lógico e a API são preservados. IDs PostgreSQL usam `BIGINT` com identidade e a exclusão bloqueia a linha com `FOR UPDATE` dentro da transação. A inicialização ocorre por CLI, nunca durante requisições ou build. Na Vercel, importação e JSON de cadastro/edição são limitados a 4 MiB; detalhes em [PUBLICAR_VERCEL.md](PUBLICAR_VERCEL.md).
+
 Atualização Figma: campos adicionais `photo_url` (link HTTPS), `category` (classificação de uso opcional) e `geometry_file` (nome do arquivo importado). Bancos existentes recebem migração aditiva com backup antes da mudança.
 
 ## Modelo implementado

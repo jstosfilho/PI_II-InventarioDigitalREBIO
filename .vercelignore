@@ -1,0 +1,24 @@
+.git
+.venv
+.vercel
+.vs
+.vs/**
+.env
+.env.*
+instance
+tmp
+Dados do PI_II
+analise
+docs
+tests
+__pycache__
+**/__pycache__
+*.sqlite3
+*.sqlite3.*
+*.db
+*.bak
+Dockerfile
+.dockerignore
+tools/preview_server.py
+tools/verify_figma_ui.cjs
+tools/update_figma_ui.py

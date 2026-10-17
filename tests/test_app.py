@@ -3,23 +3,28 @@ import io
 import sqlite3
 import tempfile
 import unittest
+from unittest.mock import patch
 from datetime import date, timedelta
 from pathlib import Path
 
 from werkzeug.security import generate_password_hash
-from inventario import create_app
+from inventario import create_app, db
+from inventario.database import Database
 
 
 class InventoryTest(unittest.TestCase):
+    def database_config(self):
+        return {'DATABASE':str(Path(self.temp.name)/'test.sqlite3'), 'DATABASE_URL':None}
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
-        self.app = create_app({'TESTING':True,'SECRET_KEY':'test','DATABASE':str(Path(self.temp.name)/'test.sqlite3')})
+        self.app = create_app({'TESTING':True,'SECRET_KEY':'test',**self.database_config()})
         result=self.app.test_cli_runner().invoke(args=['init-db'])
         self.assertEqual(result.exit_code,0,result.output)
-        with sqlite3.connect(self.app.config['DATABASE']) as connection:
-            for role in ['gestor','editor','leitor']:
-                connection.execute('INSERT INTO users(username,password_hash,role) VALUES (?,?,?)',(role,generate_password_hash('teste-seguro-123'),role))
-        connection.close()
+        with self.app.app_context():
+            with db().transaction():
+                for role in ['gestor','editor','leitor']:
+                    db().execute('INSERT INTO users(username,password_hash,role) VALUES (?,?,?)',(role,generate_password_hash('teste-seguro-123'),role))
         self.client=self.app.test_client()
         self.login()
         self.data=dict(name='Nascente de teste',kind='nascente',description='Dado fictício de teste',status='a_verificar',source='Teste automatizado',observed_on='2026-01-01',geometry={'type':'Point','coordinates':[-46.3,-23.77]})
@@ -100,9 +105,30 @@ class InventoryTest(unittest.TestCase):
         self.create()
         self.data.update(name='Trilha fictícia',kind='trilha',status='atencao',geometry={'type':'LineString','coordinates':[[-46,-23],[-46.1,-23.1]]})
         self.create()
-        for query, count in [('kind=trilha',1),('status=conservado',0),('q=Nascente',1),('kind=nascente&status=atencao',0)]:
+        for query, count in [('kind=trilha',1),('status=conservado',0),('q=Nascente',1),('q=nascente',1),('kind=nascente&status=atencao',0)]:
             self.assertEqual(len(self.client.get('/api/features?'+query).json['items']),count)
             self.assertEqual(len(self.client.get('/api/geojson?'+query).json['features']),count)
+
+    def test_failed_history_rolls_back_feature(self):
+        original = Database.execute
+
+        def fail_history(connection, query, params=()):
+            if query.startswith('INSERT INTO history'):
+                raise RuntimeError('Falha simulada ao gravar histórico')
+            return original(connection, query, params)
+
+        with patch.object(Database, 'execute', fail_history):
+            with self.assertRaisesRegex(RuntimeError, 'Falha simulada'):
+                self.client.post('/api/features', json=self.data, headers=self.headers)
+        self.assertEqual(self.client.get('/api/features').json['items'], [])
+
+    def test_cli_does_not_replace_existing_user(self):
+        runner = self.app.test_cli_runner()
+        args = ['create-user','novo.editor','--role','editor','--password','teste-seguro-123']
+        self.assertEqual(runner.invoke(args=args).exit_code, 0)
+        duplicate = runner.invoke(args=args)
+        self.assertNotEqual(duplicate.exit_code, 0)
+        self.assertIn('Usuário já existe', duplicate.output)
 
     def test_validation_of_date_and_required_fields(self):
         for changes in [{'name':'x'},{'source':''},{'observed_on':'inválido'},{'observed_on':(date.today()+timedelta(days=1)).isoformat()},{'kind':'visitante'},{'status':'qualquer'}]:
@@ -112,7 +138,8 @@ class InventoryTest(unittest.TestCase):
 
     def test_database_survives_application_restart(self):
         self.create()
-        second=create_app({'TESTING':True,'SECRET_KEY':'test','DATABASE':self.app.config['DATABASE']})
+        second=create_app({'TESTING':True,'SECRET_KEY':'test','DATABASE':self.app.config['DATABASE'],
+                           'DATABASE_URL':self.app.config['DATABASE_URL']})
         client=second.test_client()
         client.post('/api/login',json={'username':'gestor','password':'teste-seguro-123'})
         self.assertEqual(len(client.get('/api/features').json['items']),1)
@@ -163,6 +190,8 @@ class InventoryTest(unittest.TestCase):
         self.assertEqual(self.client.post('/api/import-geometry',data={},headers=self.headers).status_code,403)
 
     def test_existing_database_migration_preserves_data(self):
+        if self.app.config['DATABASE_URL']:
+            self.skipTest('Migração de arquivo exclusiva do SQLite.')
         feature_id=self.create()
         connection=sqlite3.connect(self.app.config['DATABASE'])
         try:

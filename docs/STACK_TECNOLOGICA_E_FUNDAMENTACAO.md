@@ -1,5 +1,7 @@
 # Stack tecnológica e fundamentação técnica
 
+**Atualização de 15/10/2026:** para a publicação solicitada na Vercel, foi implementado PostgreSQL via Psycopg e `DATABASE_URL`. SQLite permanece no desenvolvimento local. Waitress/Docker são alternativas de servidor persistente, não componentes da execução na Vercel. O [roteiro de publicação](PUBLICAR_VERCEL.md) substitui, nesse cenário, a decisão inicial abaixo de utilizar apenas SQLite. PostGIS continua fora da implementação.
+
 Data: 03/10/2026. Projeto: Inventário Digital da REBIO do Alto da Serra de Paranapiacaba.
 
 ## Decisão
