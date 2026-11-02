@@ -215,6 +215,18 @@ class InventoryTest(unittest.TestCase):
         self.assertNotIn('senha-longa',json.dumps(items))
         self.assertEqual(items[0]['id'],max(i['id'] for i in items))
         self.assertEqual(self.client.get('/api/audit?limit=abc').status_code,400)
+        self.assertEqual(self.client.get('/api/audit?from=ontem').status_code,400)
+        only=self.client.get('/api/audit?action=login_falha').json['items']
+        self.assertTrue(only and all(i['action']=='login_falha' for i in only))
+        mine=self.client.get('/api/audit?actor=GEST').json['items']
+        self.assertTrue(mine and all('gest' in i['actor_name'] for i in mine))
+        self.assertEqual(self.client.get('/api/audit?actor=%25').json['items'],[])
+        today=date.today().isoformat()
+        self.assertTrue(self.client.get(f'/api/audit?from={today}&to={today}').json['items'])
+        self.assertEqual(self.client.get('/api/audit?to=2000-01-01').json['items'],[])
+        page=self.client.get('/api/audit?limit=2').json['items']
+        older=self.client.get(f'/api/audit?limit=2&before={page[-1]["id"]}').json['items']
+        self.assertTrue(older and older[0]['id']<page[-1]['id'])
         for role in ('editor','leitor'):
             self.login(role)
             self.assertEqual(self.client.get('/api/audit').status_code,403)

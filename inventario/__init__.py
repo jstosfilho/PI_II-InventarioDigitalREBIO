@@ -434,11 +434,29 @@ def create_app(test_config=None):
             before = int(request.args['before']) if request.args.get('before') else None
         except ValueError:
             return jsonify(error='Parâmetros inválidos.'),400
-        query = 'SELECT id,actor_name,action,target_type,target_id,target_label,details,created_at FROM audit_log'
-        args = []
+        where, args = [], []
         if before is not None:
-            query += ' WHERE id<?'
+            where.append('id<?')
             args.append(before)
+        actor = request.args.get('actor','').strip()
+        if actor:
+            where.append("actor_name LIKE ? ESCAPE '\\'")
+            args.append('%'+actor.replace('\\','\\\\').replace('%','\\%').replace('_','\\_')+'%')
+        if request.args.get('action'):
+            where.append('action=?')
+            args.append(request.args['action'])
+        try:
+            if request.args.get('from'):
+                where.append('created_at>=?')
+                args.append(date.fromisoformat(request.args['from']).isoformat())
+            if request.args.get('to'):
+                where.append('created_at<?')
+                args.append((date.fromisoformat(request.args['to'])+timedelta(days=1)).isoformat())
+        except ValueError:
+            return jsonify(error='Data inválida.'),400
+        query = 'SELECT id,actor_name,action,target_type,target_id,target_label,details,created_at FROM audit_log'
+        if where:
+            query += ' WHERE '+' AND '.join(where)
         entries = db().execute(query+' ORDER BY id DESC LIMIT ?',args+[limit]).fetchall()
         return jsonify(items=[dict(e) for e in entries])
 
