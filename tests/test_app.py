@@ -179,6 +179,25 @@ class InventoryTest(unittest.TestCase):
         self.assertEqual(item['photo_url'],'')
         self.assertTrue(Path(self.app.config['DATABASE']+'.pre-figma.bak').exists())
 
+    def test_user_management(self):
+        users=self.client.get('/api/users').json['items']
+        self.assertEqual(len(users),3)
+        me=next(u for u in users if u['username']=='gestor')
+        created=self.client.post('/api/users',json=dict(username='visitante1',password='senha-bem-longa',role='leitor'),headers=self.headers)
+        self.assertEqual(created.status_code,201)
+        self.assertEqual(self.client.post('/api/users',json=dict(username='visitante1',password='senha-bem-longa',role='leitor'),headers=self.headers).status_code,409)
+        self.assertEqual(self.client.post('/api/users',json=dict(username='x1234',password='curta',role='leitor'),headers=self.headers).status_code,400)
+        self.assertEqual(self.client.post('/api/users',json=dict(username='abc',password='senha-bem-longa',role='root'),headers=self.headers).status_code,400)
+        uid=created.json['id']
+        self.assertEqual(self.client.patch(f'/api/users/{uid}',json=dict(role='editor'),headers=self.headers).status_code,200)
+        self.assertEqual(self.client.patch(f'/api/users/{me["id"]}',json=dict(role='leitor'),headers=self.headers).status_code,400)
+        self.assertEqual(self.client.delete(f'/api/users/{me["id"]}',headers=self.headers).status_code,400)
+        self.assertEqual(self.client.delete(f'/api/users/{uid}',headers=self.headers).status_code,204)
+        for role in ('editor','leitor'):
+            self.login(role)
+            self.assertEqual(self.client.get('/api/users').status_code,403)
+            self.assertEqual(self.client.post('/api/users',json=dict(username='intruso1',password='senha-bem-longa',role='gestor'),headers=self.headers).status_code,403)
+
 
 if __name__=='__main__':
     unittest.main()

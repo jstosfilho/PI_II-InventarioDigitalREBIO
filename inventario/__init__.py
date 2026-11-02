@@ -298,6 +298,101 @@ def create_app(test_config=None):
         entries=db().execute('SELECT h.action,h.snapshot,h.created_at,u.username FROM history h JOIN users u ON u.id=h.actor_id WHERE feature_id=? ORDER BY h.id DESC',(feature_id,)).fetchall()
         return jsonify(items=[dict(entry) for entry in entries])
 
+    ROLES = ('gestor','editor','leitor')
+
+    def manager_only():
+        if g.user['role'] != 'gestor':
+            return jsonify(error='Somente o gestor pode administrar usuários.'),403
+        return None
+
+    def user_payload(body, creating):
+        if not isinstance(body,dict):
+            raise ValueError('Envie um objeto JSON.')
+        out = {}
+        if creating or 'username' in body:
+            name = body.get('username')
+            if not isinstance(name,str) or not 3 <= len(name.strip()) <= 60:
+                raise ValueError('Usuário deve ter de 3 a 60 caracteres.')
+            out['username'] = name.strip()
+        if creating or 'role' in body:
+            if body.get('role') not in ROLES:
+                raise ValueError('Perfil inválido.')
+            out['role'] = body['role']
+        if creating or body.get('password'):
+            pw = body.get('password')
+            if not isinstance(pw,str) or not 10 <= len(pw) <= 200:
+                raise ValueError('Use uma senha de pelo menos 10 caracteres.')
+            out['password'] = pw
+        return out
+
+    @app.get('/api/users')
+    @protected()
+    def list_users():
+        denied = manager_only()
+        if denied: return denied
+        users = db().execute('SELECT id, username, role FROM users ORDER BY username').fetchall()
+        return jsonify(items=[dict(u) for u in users])
+
+    @app.post('/api/users')
+    @protected(write=True)
+    def create_user_api():
+        denied = manager_only()
+        if denied: return denied
+        try:
+            data = user_payload(request.get_json(silent=True), True)
+        except ValueError as error:
+            return jsonify(error=str(error)),400
+        try:
+            with db():
+                cursor = db().execute('INSERT INTO users(username,password_hash,role) VALUES (?,?,?)',
+                                      (data['username'],generate_password_hash(data['password']),data['role']))
+        except sqlite3.IntegrityError:
+            return jsonify(error='Usuário já existe.'),409
+        return jsonify(id=cursor.lastrowid,username=data['username'],role=data['role']),201
+
+    @app.patch('/api/users/<int:user_id>')
+    @protected(write=True)
+    def update_user(user_id):
+        denied = manager_only()
+        if denied: return denied
+        try:
+            data = user_payload(request.get_json(silent=True), False)
+        except ValueError as error:
+            return jsonify(error=str(error)),400
+        if not data:
+            return jsonify(error='Nada para alterar.'),400
+        if user_id == g.user['id'] and data.get('role', 'gestor') != 'gestor':
+            return jsonify(error='Você não pode rebaixar o próprio perfil.'),400
+        try:
+            with db():
+                if not db().execute('SELECT id FROM users WHERE id=?',(user_id,)).fetchone():
+                    return jsonify(error='Usuário não encontrado.'),404
+                if 'username' in data:
+                    db().execute('UPDATE users SET username=? WHERE id=?',(data['username'],user_id))
+                if 'role' in data:
+                    db().execute('UPDATE users SET role=? WHERE id=?',(data['role'],user_id))
+                if 'password' in data:
+                    db().execute('UPDATE users SET password_hash=? WHERE id=?',(generate_password_hash(data['password']),user_id))
+        except sqlite3.IntegrityError:
+            return jsonify(error='Usuário já existe.'),409
+        return jsonify(id=user_id)
+
+    @app.delete('/api/users/<int:user_id>')
+    @protected(write=True)
+    def delete_user(user_id):
+        denied = manager_only()
+        if denied: return denied
+        if user_id == g.user['id']:
+            return jsonify(error='Você não pode excluir a própria conta.'),400
+        try:
+            with db():
+                cursor = db().execute('DELETE FROM users WHERE id=?',(user_id,))
+        except sqlite3.IntegrityError:
+            return jsonify(error='Usuário possui registros no histórico. Altere o perfil para leitor.'),409
+        if not cursor.rowcount:
+            return jsonify(error='Usuário não encontrado.'),404
+        return '',204
+
     @app.cli.command('init-db')
     def init_db():
         Path(app.config['DATABASE']).parent.mkdir(parents=True,exist_ok=True)
