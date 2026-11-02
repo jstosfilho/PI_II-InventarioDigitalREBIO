@@ -100,6 +100,9 @@ def create_app(test_config=None):
     if Path(app.config['DATABASE']).exists():
         connection = sqlite3.connect(app.config['DATABASE'], timeout=15)
         try:
+            if connection.execute("SELECT 1 FROM sqlite_master WHERE name='users'").fetchone():
+                with connection:
+                    connection.executescript(Path(app.root_path,'schema.sql').read_text(encoding='utf-8'))
             columns = {row[1] for row in connection.execute('PRAGMA table_info(features)')}
             missing = {'photo_url','category','geometry_file'} - columns
             if columns and missing:
@@ -159,11 +162,21 @@ def create_app(test_config=None):
             return jsonify(error='Informe usuário e senha.'), 400
         user = db().execute('SELECT * FROM users WHERE username=?',(data['username'],)).fetchone()
         if not user or not check_password_hash(user['password_hash'],data['password']):
+            with db():
+                audit('login_falha','user',user['id'] if user else None,data['username'][:60])
             return jsonify(error='Usuário ou senha incorretos.'), 401
+        with db():
+            audit('login','user',user['id'],user['username'],actor=user)
         session.clear()
         session.update(uid=user['id'], csrf=secrets.token_hex(32))
         session.permanent = True
         return jsonify(username=user['username'],role=user['role'],csrf=session['csrf'])
+
+    def audit(action, target_type='', target_id=None, label='', details='', actor=None):
+        # Não confirma a transação: o chamador decide, mantendo a trilha atômica com a ação.
+        actor = actor or g.user
+        db().execute('INSERT INTO audit_log(actor_id,actor_name,action,target_type,target_id,target_label,details) VALUES (?,?,?,?,?,?,?)',
+                     (actor['id'] if actor else None, actor['username'] if actor else '', action, target_type, target_id, label, details))
 
     @app.get('/api/session')
     @protected()
@@ -175,6 +188,8 @@ def create_app(test_config=None):
     def logout():
         if not secrets.compare_digest(request.headers.get('X-CSRF-Token',''),session.get('csrf','')):
             return jsonify(error='Sessão inválida.'),403
+        with db():
+            audit('logout','user',g.user['id'],g.user['username'])
         session.clear()
         return '',204
 
@@ -211,6 +226,7 @@ def create_app(test_config=None):
         row=db().execute('SELECT * FROM features WHERE id=?',(feature_id,)).fetchone()
         db().execute('INSERT INTO history(feature_id,actor_id,action,snapshot) VALUES (?,?,?,?)',
                      (feature_id,g.user['id'],action,json.dumps(serialize(row),ensure_ascii=False)))
+        audit(action,'feature',feature_id,row['name'])
 
     @app.post('/api/features')
     @protected(write=True)
@@ -286,6 +302,8 @@ def create_app(test_config=None):
                 return jsonify(error='Registro não encontrado.'),404
             if row['version'] != body['version']:
                 return jsonify(error='Registro alterado. Recarregue antes de excluir.'),409
+            audit('exclusao','feature',feature_id,db().execute('SELECT name FROM features WHERE id=?',(feature_id,)).fetchone()['name'],
+                  'Exclusão definitiva; histórico do registro removido.')
             db().execute('DELETE FROM history WHERE feature_id=?',(feature_id,))
             db().execute('DELETE FROM features WHERE id=?',(feature_id,))
         return '',204
@@ -346,6 +364,7 @@ def create_app(test_config=None):
             with db():
                 cursor = db().execute('INSERT INTO users(username,password_hash,role) VALUES (?,?,?)',
                                       (data['username'],generate_password_hash(data['password']),data['role']))
+                audit('usuario_criado','user',cursor.lastrowid,data['username'],'perfil='+data['role'])
         except sqlite3.IntegrityError:
             return jsonify(error='Usuário já existe.'),409
         return jsonify(id=cursor.lastrowid,username=data['username'],role=data['role']),201
@@ -365,8 +384,17 @@ def create_app(test_config=None):
             return jsonify(error='Você não pode rebaixar o próprio perfil.'),400
         try:
             with db():
-                if not db().execute('SELECT id FROM users WHERE id=?',(user_id,)).fetchone():
+                before = db().execute('SELECT username, role FROM users WHERE id=?',(user_id,)).fetchone()
+                if not before:
                     return jsonify(error='Usuário não encontrado.'),404
+                changes = []
+                if 'username' in data and data['username'] != before['username']:
+                    changes.append(f"usuário: {before['username']} -> {data['username']}")
+                if 'role' in data and data['role'] != before['role']:
+                    changes.append(f"perfil: {before['role']} -> {data['role']}")
+                if 'password' in data:
+                    changes.append('senha redefinida')
+                audit('usuario_alterado','user',user_id,data.get('username',before['username']),'; '.join(changes))
                 if 'username' in data:
                     db().execute('UPDATE users SET username=? WHERE id=?',(data['username'],user_id))
                 if 'role' in data:
@@ -386,12 +414,33 @@ def create_app(test_config=None):
             return jsonify(error='Você não pode excluir a própria conta.'),400
         try:
             with db():
+                target = db().execute('SELECT username, role FROM users WHERE id=?',(user_id,)).fetchone()
                 cursor = db().execute('DELETE FROM users WHERE id=?',(user_id,))
+                if cursor.rowcount:
+                    audit('usuario_excluido','user',user_id,target['username'],'perfil='+target['role'])
         except sqlite3.IntegrityError:
             return jsonify(error='Usuário possui registros no histórico. Altere o perfil para leitor.'),409
         if not cursor.rowcount:
             return jsonify(error='Usuário não encontrado.'),404
         return '',204
+
+    @app.get('/api/audit')
+    @protected()
+    def list_audit():
+        denied = manager_only()
+        if denied: return denied
+        try:
+            limit = min(max(int(request.args.get('limit',100)),1),500)
+            before = int(request.args['before']) if request.args.get('before') else None
+        except ValueError:
+            return jsonify(error='Parâmetros inválidos.'),400
+        query = 'SELECT id,actor_name,action,target_type,target_id,target_label,details,created_at FROM audit_log'
+        args = []
+        if before is not None:
+            query += ' WHERE id<?'
+            args.append(before)
+        entries = db().execute(query+' ORDER BY id DESC LIMIT ?',args+[limit]).fetchall()
+        return jsonify(items=[dict(e) for e in entries])
 
     @app.cli.command('init-db')
     def init_db():
