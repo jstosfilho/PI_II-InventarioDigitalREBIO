@@ -1,0 +1,17 @@
+services:
+  web:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      REBIO_DATABASE: /data/inventario.sqlite3
+      # Use 1 apenas atrás de HTTPS; em http://localhost o login falharia.
+      REBIO_SECURE_COOKIE: "0"
+      # Defina REBIO_SECRET_KEY no ambiente ou em um arquivo .env (não versionado).
+      REBIO_SECRET_KEY: ${REBIO_SECRET_KEY:?defina REBIO_SECRET_KEY}
+    volumes:
+      - rebio-data:/data
+    restart: unless-stopped
+
+volumes:
+  rebio-data:

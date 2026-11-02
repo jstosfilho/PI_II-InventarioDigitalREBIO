@@ -18,6 +18,31 @@ python -m venv .venv
 
 O comando `create-user` pede uma senha de pelo menos 10 caracteres; não há senha padrão. Abra http://127.0.0.1:5000. Para criar outros perfis, use `--role editor` ou `--role leitor`. Não é necessário ativar o ambiente virtual. O banco é criado em `instance/inventario.sqlite3`. Nunca coloque banco, senhas ou dados ambientais reais no Git. As fontes originais e os textos extraídos, que contêm dados pessoais do grupo, também estão excluídos pelo `.gitignore`.
 
+## Executar no Linux
+
+Python 3.12 ou superior (no Debian/Ubuntu, `sudo apt install python3-venv`).
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python -m flask --app inventario init-db
+.venv/bin/python -m flask --app inventario create-user seu.usuario --role gestor
+.venv/bin/python -m flask --app inventario run --host 127.0.0.1 --port 5000
+```
+
+Testes: `.venv/bin/python -m unittest discover -s tests -v`.
+
+## Executar com Docker Compose
+
+```bash
+export REBIO_SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_hex(32))")
+docker compose up -d --build
+docker compose exec web python -m flask --app inventario init-db
+docker compose exec web python -m flask --app inventario create-user seu.usuario --role gestor
+```
+
+Abra http://localhost:8080. O banco fica no volume `rebio-data`. Para persistir a chave, coloque `REBIO_SECRET_KEY=...` em um arquivo `.env` (já ignorado pelo Git). Atrás de HTTPS, altere `REBIO_SECURE_COOKIE` para `"1"`.
+
 ## Funcionalidades
 
 - Login e perfis gestor, editor e leitor.
