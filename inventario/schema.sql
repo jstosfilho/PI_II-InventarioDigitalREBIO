@@ -31,3 +31,15 @@ CREATE TABLE IF NOT EXISTS history (
  snapshot TEXT NOT NULL,
  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
 );
+-- Trilha de auditoria: sem chaves estrangeiras para sobreviver à exclusão de usuários e registros.
+CREATE TABLE IF NOT EXISTS audit_log (
+ id INTEGER PRIMARY KEY,
+ actor_id INTEGER,
+ actor_name TEXT NOT NULL DEFAULT '',
+ action TEXT NOT NULL,
+ target_type TEXT NOT NULL DEFAULT '',
+ target_id INTEGER,
+ target_label TEXT NOT NULL DEFAULT '',
+ details TEXT NOT NULL DEFAULT '',
+ created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+);
